@@ -8,6 +8,11 @@ from .response import ModelResponse
 from .model import LabelStudioMLBase
 from .exceptions import exception_handler
 
+import base64, io
+from datetime import datetime, timezone
+from PIL import Image
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
 _server = Flask(__name__)
@@ -141,6 +146,22 @@ def health():
         'status': 'UP',
         'model_class': MODEL_CLASS.__name__
     })
+
+@_server.route('/infer', methods=['POST'])
+@exception_handler
+def _infer():
+    data = request.json or {}
+    if "image_b64" not in data:
+        return jsonify({"error": "image_b64 required"}), 400
+
+    img = Image.open(io.BytesIO(base64.b64decode(data["image_b64"]))).convert("RGB")
+    image = np.array(img)
+
+    classes = data.get("classes")
+    conf = float(data.get("conf", 0.25))
+    model = MODEL_CLASS()
+    dets = model.infer(image=image, classes=classes, conf=conf)
+    return jsonify({"detections": dets})
 
 
 @_server.route('/metrics', methods=['GET'])
